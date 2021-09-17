@@ -1,0 +1,183 @@
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ves-system
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: volterra-ce-init 
+  namespace: ves-system
+spec:
+  selector:
+    matchLabels:
+      name: volterra-ce-init
+  template:
+    metadata:
+      labels:
+        name: volterra-ce-init 
+    spec:
+      hostNetwork: true
+      hostPID: true
+      containers:
+      - name: volterra-ce-init
+        image: docker.io/volterraio/volterra-ce-init 
+        volumeMounts:
+        - name: hostroot 
+          mountPath: /host
+        securityContext:
+          privileged: true
+      volumes:
+      - name: hostroot
+        hostPath:
+          path: /
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vpm-sa
+  namespace: ves-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: vpm-role
+  namespace: ves-system
+rules:
+- apiGroups: ["*"]
+  resources: ["*"]
+  verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: vpm-role-binding
+  namespace: ves-system
+subjects:
+- kind: ServiceAccount
+  name: vpm-sa
+  apiGroup: ""
+  namespace: ves-system
+roleRef:
+  kind: Role
+  name: vpm-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRoleBinding
+metadata:
+  name: ver
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+- kind: ServiceAccount
+  name: ver
+  namespace: ves-system
+---
+apiVersion: v1 
+kind: ConfigMap 
+metadata:
+  name: vpm-cfg
+  namespace: ves-system
+data: 
+ config.yaml: | 
+  Vpm:
+    # CHANGE ME
+    ClusterName: eks-cluster
+    ClusterType: ce
+    Config: /etc/vpm/config.yaml
+    DisableModules: ["dictator", "recruiter"]
+    # CHANGE ME
+    Latitude: 41.5908
+    # CHANGE ME
+    Longitude: -93.6208
+    MauriceEndpoint: https://register.ves.volterra.io
+    MauricePrivateEndpoint: https://register-tls.ves.volterra.io
+    PrivateNIC: eth0
+    SkipStages: ["osSetup", "etcd", "kubelet", "master", "voucher", "workload", "controlWorkload"]
+    # CHANGE ME
+    Token: <token>
+    CertifiedHardware: k8s-voltmesh
+---
+apiVersion: apps/v1
+kind: StatefulSet 
+metadata:
+  name: vp-manager
+  namespace: ves-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: vpm
+  serviceName: "vp-manager"
+  template:
+    metadata:
+      labels:
+        name: vpm
+        statefulset: vp-manager
+    spec:
+      serviceAccountName: vpm-sa
+      initContainers:
+      - name : vpm-init-config
+        image: busybox
+        volumeMounts:
+        - name: etcvpm
+          mountPath: /etc/vpm
+        - name: vpmconfigmap
+          mountPath: /tmp/config.yaml
+          subPath: config.yaml
+        command:
+        - "/bin/sh"
+        - "-c"
+        - "cp /tmp/config.yaml /etc/vpm"
+      containers:
+      - name: vp-manager 
+        image: docker.io/volterraio/vpm
+        imagePullPolicy: Always
+        volumeMounts:
+        - name: etcvpm
+          mountPath: /etc/vpm
+        - name: varvpm
+          mountPath: /var/lib/vpm
+        - name: podinfo
+          mountPath: /etc/podinfo
+        - name: data
+          mountPath: /data
+        securityContext:
+          privileged: true
+      terminationGracePeriodSeconds: 1 
+      volumes:
+      - name: podinfo
+        downwardAPI:
+          items:
+            - path: "labels"
+              fieldRef:
+                fieldPath: metadata.labels
+      - name: vpmconfigmap
+        configMap:
+          name: vpm-cfg
+  volumeClaimTemplates:
+  - metadata:
+      name: etcvpm
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 1Gi
+  - metadata:
+      name: varvpm
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 1Gi
+  - metadata:
+      name: data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 1Gi

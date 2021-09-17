@@ -1,0 +1,147 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: buytime-reverse-proxy
+spec:
+  selector:
+    matchLabels:
+      app: buytime-reverse-proxy
+  template:
+    metadata:
+      labels:
+        app: buytime-reverse-proxy
+    spec:
+      containers:
+        - name: server
+          image: interestingstorage/buytime-rp:v1
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: buytime-reverse-proxy
+spec:
+  type: ClusterIP
+  selector:
+    app: buytime-reverse-proxy
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: buytime-database
+spec:
+  selector:
+    matchLabels:
+      app: buytime-database
+  template:
+    metadata:
+      labels:
+        app: buytime-database
+    spec:
+      containers:
+        - name: server
+          image: interestingstorage/buytime-db:v1
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3306
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: buytime-database
+spec:
+  type: ClusterIP
+  selector:
+    app: buytime-database
+  ports:
+    - name: mysql
+      port: 3306
+      targetPort: 3306
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+spec:
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+        - name: server
+          image: interestingstorage/buytime-backend:v1
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 9192
+          env:
+            - name: MYSQL_HOST
+              value: "buytime-database"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+spec:
+  type: ClusterIP
+  selector:
+    app: backend
+  ports:
+    - name: http
+      port: 80
+      targetPort: 9192
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+spec:
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+        - name: server
+          image: interestingstorage/buytime-frontend:v1
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+spec:
+  type: ClusterIP
+  selector:
+    app: frontend
+  ports:
+    - name: http
+      port: 80
+      targetPort: 3000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: buytime-external
+spec:
+  type: LoadBalancer
+  selector:
+    app: buytime-reverse-proxy
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80            
