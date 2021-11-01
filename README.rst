@@ -163,7 +163,7 @@ Open the kubernetes deployment file located at **./k8s-deployments/volterra-k8s-
 3. Deploy manifest
 *******************
 
-Go to the **./k8s-deployments** directory, open the console and run the following command: **kubectl apply –f volterra-k8s-manifest.yaml**. This deploys the site using the created manifest file.
+Go to the **./k8s-deployments** directory, open the console and run the following command: **kubectl apply -f volterra-k8s-manifest.yaml**. This deploys the site using the created manifest file.
 
 .. figure:: _figures/connect_eks_cluster_6.png
 
